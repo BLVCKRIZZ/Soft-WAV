@@ -5,7 +5,20 @@ const {
   rankTrackMatches,
   addTrackToPlaylist,
   buildTrackFeedbackKey,
+  findExactDeezerTrackMatch,
 } = require('./recommendation-engine.js');
+
+test('findExactDeezerTrackMatch requires both the artist and title to match', () => {
+  const deezerTracks = [
+    { title: 'MUTT', artist: { name: 'Leon Thomas' }, provider: 'deezer' },
+    { title: 'MUTT', artist: { name: 'Another Artist' }, provider: 'deezer' },
+    { title: 'MUTT Remix', artist: { name: 'Leon Thomas' }, provider: 'deezer' },
+  ];
+
+  assert.equal(findExactDeezerTrackMatch({ artist: 'Leon Thomas', track: 'Mutt' }, deezerTracks), deezerTracks[0]);
+  assert.equal(findExactDeezerTrackMatch({ artist: 'Leon Thomas', track: 'Mutt Live' }, deezerTracks), null);
+  assert.equal(findExactDeezerTrackMatch({ artist: 'Leon Thomas Jr.', track: 'Mutt' }, deezerTracks), null);
+});
 
 test('rankTrackMatches favors vibe-fit deep cuts before obvious radio hits', () => {
   const tracks = [

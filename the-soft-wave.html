@@ -2172,6 +2172,11 @@
     <button class="sidebar-link" onclick="openArtistSuggestionModal()">
       <span class="sidebar-icon">◇</span>Suggest Artist
     </button>
+    <div class="sidebar-divider"></div>
+    <span class="sidebar-label">Connect</span>
+    <a class="sidebar-link" href="https://www.instagram.com/softwav_curate/" target="_blank" rel="noopener noreferrer">
+      <span class="sidebar-icon" aria-hidden="true">◎</span>Instagram @softwav_curate ↗
+    </a>
     <div id="adminSidebarLinks" style="display:none;">
       <div class="sidebar-divider"></div>
       <span class="sidebar-label">Administration</span>
@@ -2663,6 +2668,50 @@ function safeMusicLink(value, allowedHosts) {
 function normalizeSearchText(value) {
   return String(value ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
+async function verifyTracksWithDeezer(tracks) {
+  const engine = globalThis.SoftWavRecommendationEngine;
+  if (!engine || typeof engine.findExactDeezerTrackMatch !== 'function') {
+    throw new Error('Deezer track verification is unavailable.');
+  }
+
+  const verified = new Array(tracks.length);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < tracks.length) {
+      const index = nextIndex++;
+      const track = tracks[index];
+      const artist = String(track.artist || '').trim();
+      const title = String(track.track || '').trim();
+      const query = [artist, title].filter(Boolean).join(' ');
+      const response = await fetch(`/api/deezer/search?q=${encodeURIComponent(query)}&limit=10`);
+      if (!response.ok) throw new Error(`Deezer track verification failed (${response.status}).`);
+
+      const payload = await response.json();
+      const match = engine.findExactDeezerTrackMatch(track, payload?.results);
+      if (!match) continue;
+
+      verified[index] = {
+        ...track,
+        artist: match.artist?.name || track.artist,
+        track: match.title || track.track,
+        links: { ...(track.links || {}), deezer: match.link || '' },
+        identifiers: { ...(track.identifiers || {}), deezerTrackId: match.id || null },
+        sources: {
+          ...(track.sources || {}),
+          deezer: {
+            ...(track.sources?.deezer || {}),
+            album: match.album?.title || track.sources?.deezer?.album || '',
+            duration: match.duration || track.sources?.deezer?.duration || 0,
+          },
+        },
+      };
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(3, tracks.length) }, worker));
+  return verified.filter(Boolean);
 }
 
 function scoreAudiusTrackMatch(track, query) {
@@ -4377,7 +4426,9 @@ Return EXACTLY this JSON format and nothing else:
       data = parseModelJson(raw);
       data.tracks = validateTrackList(data, catalogTracks, 5);
     }
-    renderAiTracks(data.tracks, 'soundsLikeResults', true);
+    const verifiedTracks = await verifyTracksWithDeezer(data.tracks);
+    if (!verifiedTracks.length) throw new Error('Deezer could not confirm the artist and title for these songs.');
+    renderAiTracks(verifiedTracks, 'soundsLikeResults', true);
   } catch(e) {
     const error = document.createElement('div');
     error.className = 'error-msg';
@@ -4912,6 +4963,10 @@ Return EXACTLY this JSON format and nothing else:
         raw = await callCurator(`${prompt}\n\nYour previous response failed validation: ${validationError.message} Return a corrected playlist with exactly ${selectedLength} distinct allowed track IDs.`, 0.1, system);
         data = validatePlaylistResponse(parseModelJson(raw), candidates, selectedLength, avoidArtists);
       }
+    }
+    data.tracks = await verifyTracksWithDeezer(data.tracks);
+    if (data.tracks.length !== selectedLength) {
+      throw new Error(`Deezer confirmed only ${data.tracks.length} of ${selectedLength} suggested songs. No unverified playlist was shown.`);
     }
     data.providerStates = providerData?.providerStates || {};
     data.attribution = providerData?.attribution || [];
@@ -6505,7 +6560,17 @@ async function signUp() {
   const password = document.getElementById('signupPassword').value;
   if (!name || !email || !password) { showAuthError('Please fill in all fields.'); return; }
   if (password.length < 6) { showAuthError('Password must be at least 6 characters.'); return; }
-  const { error } = await _supabase.auth.signUp({ email, password, options: { data: { display_name: name } } });
+  const emailRedirectTo = new URL(window.location.href);
+  emailRedirectTo.search = '';
+  emailRedirectTo.hash = '';
+  const { error } = await _supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: emailRedirectTo.toString(),
+      data: { display_name: name }
+    }
+  });
   if (error) { showAuthError(error.message); return; }
   document.getElementById('signupForm').style.display = 'none';
   document.getElementById('confirmNotice').style.display = '';

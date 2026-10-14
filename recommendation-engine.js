@@ -33,6 +33,18 @@
     return `${artistKey}::${trackKey}`;
   }
 
+  function findExactDeezerTrackMatch(candidate = {}, deezerTracks = []) {
+    const candidateArtist = normalizeSearchText(candidate?.artist?.name || candidate?.artist || '');
+    const candidateTitle = normalizeSearchText(candidate?.track || candidate?.title || '');
+    if (!candidateArtist || !candidateTitle || !Array.isArray(deezerTracks)) return null;
+
+    return deezerTracks.find((track) => {
+      const artist = normalizeSearchText(track?.artist?.name || track?.artist || '');
+      const title = normalizeSearchText(track?.title || track?.track || '');
+      return artist === candidateArtist && title === candidateTitle;
+    }) || null;
+  }
+
   function scoreTrackForVibe(track, query = '', feedback = {}) {
     const artistName = String(track?.artist?.name || track?.artist || '').trim();
     const rawTitle = String(track?.title || track?.track || '').trim();
@@ -181,6 +193,7 @@
   const api = {
     normalizeSearchText,
     buildTrackFeedbackKey,
+    findExactDeezerTrackMatch,
     rankTrackMatches,
     addTrackToPlaylist,
     scoreTrackForVibe,

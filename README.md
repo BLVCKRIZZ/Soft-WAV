@@ -2,6 +2,10 @@
 
 Soft WAV is a music-discovery experience that keeps its own recommendation logic and uses external providers only for supplemental discovery and preview support.
 
+## Email confirmation redirects
+
+Signup confirmation returns to the page where the user created their account. In the hosted Supabase project, set **Authentication → URL Configuration → Site URL** to the public site origin and add the deployed site URL (for example, `https://your-site.example/**`) to **Redirect URLs**. Supabase only accepts confirmation redirects that are on this allowlist. `supabase/config.toml` configures local development only.
+
 ## Deezer integration
 
 The project now includes a modular Deezer provider and backend proxy layer that keeps all external API calls on the server side.
