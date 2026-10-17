@@ -4992,8 +4992,19 @@ Return EXACTLY this JSON format and nothing else:
       try {
         data = validatePlaylistResponse(parseModelJson(raw), candidates, selectedLength, avoidArtists);
       } catch (validationError) {
-        raw = await callCurator(`${prompt}\n\nYour previous response failed validation: ${validationError.message} Return a corrected playlist with exactly ${selectedLength} distinct allowed track IDs.`, 0.1, system);
-        data = validatePlaylistResponse(parseModelJson(raw), candidates, selectedLength, avoidArtists);
+        try {
+          raw = await callCurator(`${prompt}\n\nYour previous response failed validation: ${validationError.message} Return a corrected playlist with exactly ${selectedLength} distinct allowed track IDs.`, 0.1, system);
+          data = validatePlaylistResponse(parseModelJson(raw), candidates, selectedLength, avoidArtists);
+        } catch (retryError) {
+          console.warn('AI playlist selection failed validation; using ranked candidates.', retryError);
+          data = {
+            title: `${mood.charAt(0).toUpperCase() + mood.slice(1)} — a soft wave`,
+            tracks: candidates.slice(0, selectedLength).map(track => ({
+              ...track,
+              reason: buildTrackReason(track, mood)
+            }))
+          };
+        }
       }
     }
     data.tracks = await completeVerifiedPlaylistTracks(data.tracks, candidates, selectedLength, mood);
