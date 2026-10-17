@@ -822,6 +822,8 @@
 
   .ai-track-links {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 0.5rem;
   }
 
@@ -1748,6 +1750,30 @@
     .mood-context-field.wide { grid-column: auto; }
     .artist-filter-grid { grid-template-columns: repeat(2, 1fr); }
     .playlist-title { font-size: 2rem; }
+    .playlist-output-inner {
+      width: 100%;
+      padding: 2rem max(1rem, env(safe-area-inset-right)) 2rem max(1rem, env(safe-area-inset-left));
+    }
+    .playlist-output-header,
+    .playlist-output-actions,
+    .playlist-tracks,
+    .ai-track-card {
+      min-width: 0;
+    }
+    .playlist-title { overflow-wrap: anywhere; }
+    .playlist-output-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.55rem;
+    }
+    .playlist-output-actions .btn {
+      min-width: 0;
+      white-space: normal;
+      text-align: center;
+    }
+    .ai-track-card { overflow-wrap: anywhere; }
+    .ai-track-links { gap: 0.4rem; }
+    .ai-track-link { letter-spacing: 0.04em; }
     .header-actions .btn span { display: none; }
     .header-actions .btn .header-action-label-mobile { display: inline; }
     .page-title { font-size: 1.7rem; }
