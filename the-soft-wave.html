@@ -6284,10 +6284,45 @@ async function sendChat() {
     return out;
   };
 
-  const finishReply = (reply, skipLinkify = false) => {
+  const finishReply = async (reply, skipLinkify = false) => {
     const loadingEl = document.getElementById(loadingId);
+    let renderedReply = skipLinkify ? reply : linkifyReply(reply);
+    const proposedTracks = extractTracksFromChatHTML(renderedReply);
+    if (proposedTracks.length) {
+      let verifiedTracks = [];
+      let verificationUnavailable = false;
+      try {
+        verifiedTracks = await verifyTracksWithDeezer(proposedTracks);
+      } catch (error) {
+        verificationUnavailable = true;
+        console.warn('Chat track verification failed:', error);
+      }
+
+      const verifiedKeys = new Set(verifiedTracks.map(track =>
+        `${normalizeSearchText(track.artist)}::${normalizeSearchText(track.track)}`
+      ));
+      let removedCount = 0;
+      const verifiedLines = renderedReply.split(/<br\s*\/?\s*>/i).filter(line => {
+        if (!/href=["']https:\/\/open\.spotify\.com\/search\//i.test(line)) return true;
+        const lineTracks = extractTracksFromChatHTML(line);
+        const isVerified = lineTracks.length > 0 && lineTracks.every(track =>
+          verifiedKeys.has(`${normalizeSearchText(track.artist)}::${normalizeSearchText(track.track)}`)
+        );
+        if (!isVerified) removedCount += Math.max(1, lineTracks.length);
+        return isVerified;
+      });
+
+      if (removedCount) {
+        const message = verificationUnavailable
+          ? 'Deezer could not be reached, so unverified song suggestions were left out.'
+          : `${removedCount} song suggestion${removedCount === 1 ? ' was' : 's were'} left out because Deezer could not confirm them.`;
+        verifiedLines.push(`<div class="detail-sound" role="status">${message}</div>`);
+      }
+      renderedReply = verifiedLines.join('<br>');
+    }
+
     if (loadingEl) {
-      loadingEl.innerHTML = skipLinkify ? reply : linkifyReply(reply);
+      loadingEl.innerHTML = renderedReply;
       // Detect responses with 3+ tracks and offer save-as-playlist
       const tracks = extractTracksFromChatHTML(loadingEl.innerHTML);
       if (tracks.length >= 3) {
@@ -6301,7 +6336,7 @@ async function sendChat() {
         loadingEl.appendChild(bar);
       }
     }
-    const cleanReply = reply.replace(/["']?\s*(?:target|rel|class)=["'][^>]*>(?:\s*↗[^\n↗]*)*/gi, '').replace(/<[^>]*>/g, '');
+    const cleanReply = renderedReply.replace(/["']?\s*(?:target|rel|class)=["'][^>]*>(?:\s*↗[^\n↗]*)*/gi, '').replace(/<[^>]*>/g, '');
     chatHistory.push({ role: 'ai', text: cleanReply });
     _supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) _supabase.from('chat_messages').insert({ user_id: session.user.id, role: 'assistant', content: cleanReply });
