@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<q></q><!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2728,6 +2728,24 @@ async function verifyTracksWithDeezer(tracks) {
   return verified.filter(Boolean);
 }
 
+async function completeVerifiedPlaylistTracks(tracks, candidates, expectedCount, mood) {
+  const verified = await verifyTracksWithDeezer(tracks);
+  const seenTrackIds = new Set(verified.map(track => track.trackId));
+  const selectedTrackIds = new Set(tracks.map(track => track.trackId));
+  const alternatives = candidates.filter(track => !selectedTrackIds.has(track.trackId));
+
+  for (let index = 0; index < alternatives.length && verified.length < expectedCount; index += 6) {
+    const replacements = await verifyTracksWithDeezer(alternatives.slice(index, index + 6));
+    replacements.forEach(track => {
+      if (seenTrackIds.has(track.trackId)) return;
+      seenTrackIds.add(track.trackId);
+      verified.push({ ...track, reason: track.reason || buildTrackReason(track, mood) });
+    });
+  }
+
+  return verified.slice(0, expectedCount);
+}
+
 function scoreAudiusTrackMatch(track, query) {
   const rawTitle = String(track?.title || '').trim();
   const rawArtist = String(track?.artist || '').trim();
@@ -4978,9 +4996,9 @@ Return EXACTLY this JSON format and nothing else:
         data = validatePlaylistResponse(parseModelJson(raw), candidates, selectedLength, avoidArtists);
       }
     }
-    data.tracks = await verifyTracksWithDeezer(data.tracks);
+    data.tracks = await completeVerifiedPlaylistTracks(data.tracks, candidates, selectedLength, mood);
     if (data.tracks.length !== selectedLength) {
-      throw new Error(`Deezer confirmed only ${data.tracks.length} of ${selectedLength} suggested songs. No unverified playlist was shown.`);
+      throw new Error(`Deezer confirmed only ${data.tracks.length} of ${selectedLength} songs after checking the available catalog. No unverified playlist was shown.`);
     }
     data.providerStates = providerData?.providerStates || {};
     data.attribution = providerData?.attribution || [];
